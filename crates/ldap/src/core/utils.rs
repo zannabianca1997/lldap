@@ -306,6 +306,7 @@ pub fn map_group_field(field: &AttributeName, schema: &PublicSchema) -> GroupFie
 pub struct LdapInfo {
     pub base_dn: Vec<(String, String)>,
     pub base_dn_str: String,
+    pub ldap_readonly: bool,
     pub ignored_user_attributes: Vec<AttributeName>,
     pub ignored_group_attributes: Vec<AttributeName>,
 }
@@ -313,6 +314,7 @@ pub struct LdapInfo {
 impl LdapInfo {
     pub fn new(
         base_dn: &str,
+        ldap_readonly: bool,
         ignored_user_attributes: Vec<AttributeName>,
         ignored_group_attributes: Vec<AttributeName>,
     ) -> LdapResult<Self> {
@@ -321,6 +323,7 @@ impl LdapInfo {
         Ok(Self {
             base_dn,
             base_dn_str,
+            ldap_readonly,
             ignored_user_attributes,
             ignored_group_attributes,
         })
@@ -546,9 +549,14 @@ mod tests {
     #[test]
     fn test_whitespace_in_ldap_info() {
         assert_eq!(
-            LdapInfo::new("   ou=people, dc =example,  dc=com \n", vec![], vec![])
-                .unwrap()
-                .base_dn_str,
+            LdapInfo::new(
+                "   ou=people, dc =example,  dc=com \n",
+                false,
+                vec![],
+                vec![]
+            )
+            .unwrap()
+            .base_dn_str,
             "ou=people,dc=example,dc=com"
         );
     }

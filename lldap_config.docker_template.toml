@@ -18,6 +18,11 @@
 ## The port on which to have the LDAP server.
 #ldap_port = 3890
 
+## Make the LDAP and LDAPS interfaces fully read-only.
+## This only affects LDAP writes such as add, delete, modify, and password changes.
+## The HTTP administration interface is unaffected.
+#ldap_readonly = false
+
 ## The host address that the HTTP server will be bound to.
 ## To enable IPv6 support, simply switch "http_host" to "::".
 ## To only allow connections from localhost (if you want to restrict to local self-hosted services),

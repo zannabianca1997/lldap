@@ -158,8 +158,8 @@ pub mod tests {
     use crate::handler::{
         LdapHandler, make_modify_response,
         tests::{
-            setup_bound_admin_handler, setup_bound_password_manager_handler,
-            setup_bound_readonly_handler,
+            setup_bound_admin_handler, setup_bound_admin_readonly_handler,
+            setup_bound_password_manager_handler, setup_bound_readonly_handler,
         },
     };
     use chrono::TimeZone;
@@ -566,6 +566,27 @@ pub mod tests {
             Some(vec![make_extended_response(
                 LdapResultCode::InsufficentAccessRights,
                 "User `test` cannot modify the password of user `bob`".to_string(),
+            )])
+        );
+    }
+
+    #[tokio::test]
+    async fn test_password_change_when_ldap_readonly() {
+        let mut ldap_handler =
+            setup_bound_admin_readonly_handler(MockTestBackendHandler::new()).await;
+        let request = LdapOp::ExtendedRequest(
+            LdapPasswordModifyRequest {
+                user_identity: Some("uid=bob,ou=people,dc=example,dc=com".to_string()),
+                old_password: None,
+                new_password: Some("password".to_string()),
+            }
+            .into(),
+        );
+        assert_eq!(
+            ldap_handler.handle_ldap_message(request).await,
+            Some(vec![make_extended_response(
+                LdapResultCode::UnwillingToPerform,
+                "LDAP interface is configured as read-only".to_string(),
             )])
         );
     }

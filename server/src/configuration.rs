@@ -129,6 +129,8 @@ pub struct Configuration {
     pub ldap_host: String,
     #[builder(default = "3890")]
     pub ldap_port: u16,
+    #[builder(default = "false")]
+    pub ldap_readonly: bool,
     #[builder(default = r#"String::from("0.0.0.0")"#)]
     pub http_host: String,
     #[builder(default = "17170")]

@@ -161,7 +161,7 @@ async fn create_group(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::handler::tests::setup_bound_admin_handler;
+    use crate::handler::tests::{setup_bound_admin_handler, setup_bound_admin_readonly_handler};
     use lldap_domain::types::*;
     use lldap_test_utils::MockTestBackendHandler;
     use mockall::predicate::eq;
@@ -219,6 +219,25 @@ mod tests {
             Ok(vec![make_add_response(
                 LdapResultCode::Success,
                 String::new()
+            )])
+        );
+    }
+
+    #[tokio::test]
+    async fn test_create_user_when_ldap_readonly() {
+        let ldap_handler = setup_bound_admin_readonly_handler(MockTestBackendHandler::new()).await;
+        let request = LdapAddRequest {
+            dn: "uid=bob,ou=people,dc=example,dc=com".to_owned(),
+            attributes: vec![LdapPartialAttribute {
+                atype: "cn".to_owned(),
+                vals: vec![b"Bob".to_vec()],
+            }],
+        };
+        assert_eq!(
+            ldap_handler.create_user_or_group(request).await,
+            Ok(vec![make_add_response(
+                LdapResultCode::UnwillingToPerform,
+                "LDAP interface is configured as read-only".to_string()
             )])
         );
     }

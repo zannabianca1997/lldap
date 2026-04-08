@@ -131,6 +131,7 @@ where
         Box::leak(Box::new(
             LdapInfo::new(
                 &config.ldap_base_dn,
+                config.ldap_readonly,
                 config.ignored_user_attributes.clone(),
                 config.ignored_group_attributes.clone(),
             )

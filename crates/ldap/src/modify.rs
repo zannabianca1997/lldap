@@ -125,8 +125,8 @@ mod tests {
     use super::*;
     use crate::{
         handler::tests::{
-            setup_bound_admin_handler, setup_bound_handler_with_group,
-            setup_bound_password_manager_handler,
+            setup_bound_admin_handler, setup_bound_admin_readonly_handler,
+            setup_bound_handler_with_group, setup_bound_password_manager_handler,
         },
         password::tests::expect_password_change,
     };
@@ -300,6 +300,19 @@ mod tests {
             make_modify_failure_response(
                 LdapResultCode::InvalidAttributeSyntax,
                 "Wrong number of values for password attribute: 2"
+            )
+        );
+    }
+
+    #[tokio::test]
+    async fn test_modify_password_when_ldap_readonly() {
+        let ldap_handler = setup_bound_admin_readonly_handler(MockTestBackendHandler::new()).await;
+        let request = make_password_modify_request("bob");
+        assert_eq!(
+            ldap_handler.do_modify_request(&request).await,
+            make_modify_failure_response(
+                LdapResultCode::UnwillingToPerform,
+                "LDAP interface is configured as read-only"
             )
         );
     }

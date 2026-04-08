@@ -102,7 +102,7 @@ async fn delete_group(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::handler::tests::setup_bound_admin_handler;
+    use crate::handler::tests::{setup_bound_admin_handler, setup_bound_admin_readonly_handler};
     use chrono::TimeZone;
     use lldap_domain::{
         types::{Group, GroupId, User},
@@ -168,6 +168,20 @@ mod tests {
             Some(vec![make_del_response(
                 LdapResultCode::Success,
                 String::new()
+            )])
+        );
+    }
+
+    #[tokio::test]
+    async fn test_delete_user_when_ldap_readonly() {
+        let mut ldap_handler =
+            setup_bound_admin_readonly_handler(MockTestBackendHandler::new()).await;
+        let request = LdapOp::DelRequest("uid=bob,ou=people,dc=example,dc=com".to_owned());
+        assert_eq!(
+            ldap_handler.handle_ldap_message(request).await,
+            Some(vec![make_del_response(
+                LdapResultCode::UnwillingToPerform,
+                "LDAP interface is configured as read-only".to_string()
             )])
         );
     }

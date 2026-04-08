@@ -102,13 +102,34 @@ impl<Backend: BackendHandler + LoginHandler + OpaqueHandler> LdapHandler<Backend
 
     #[cfg(test)]
     pub fn new_for_tests(backend_handler: Backend, ldap_base_dn: &str) -> Self {
+        Self::new_for_tests_with_readonly(backend_handler, ldap_base_dn, false)
+    }
+
+    #[cfg(test)]
+    pub fn new_for_tests_with_readonly(
+        backend_handler: Backend,
+        ldap_base_dn: &str,
+        ldap_readonly: bool,
+    ) -> Self {
         Self::new(
             AccessControlledBackendHandler::new(backend_handler),
             Box::leak(Box::new(
-                LdapInfo::new(ldap_base_dn, Vec::new(), Vec::new()).unwrap(),
+                LdapInfo::new(ldap_base_dn, ldap_readonly, Vec::new(), Vec::new()).unwrap(),
             )),
             uuid::Uuid::parse_str("550e8400-e29b-41d4-a716-446655440000").unwrap(),
         )
+    }
+
+    fn readonly_response(
+        &self,
+        make_response: impl FnOnce(LdapResultCode, String) -> LdapOp,
+    ) -> Option<Vec<LdapOp>> {
+        self.ldap_info.ldap_readonly.then(|| {
+            vec![make_response(
+                LdapResultCode::UnwillingToPerform,
+                "LDAP interface is configured as read-only".to_string(),
+            )]
+        })
     }
 
     fn get_credentials(&self) -> Credentials<'_> {
@@ -195,6 +216,9 @@ impl<Backend: BackendHandler + LoginHandler + OpaqueHandler> LdapHandler<Backend
         match request.name.as_str() {
             OID_PASSWORD_MODIFY => match LdapPasswordModifyRequest::try_from(request) {
                 Ok(password_request) => {
+                    if let Some(response) = self.readonly_response(make_extended_response) {
+                        return response;
+                    }
                     let credentials = match self.get_credentials() {
                         Credentials::Bound(cred) => cred,
                         Credentials::Unbound(err) => return err,
@@ -237,6 +261,9 @@ impl<Backend: BackendHandler + LoginHandler + OpaqueHandler> LdapHandler<Backend
 
     #[instrument(skip_all, level = "debug", fields(dn = %request.dn))]
     pub async fn do_modify_request(&self, request: &LdapModifyRequest) -> Vec<LdapOp> {
+        if let Some(response) = self.readonly_response(make_modify_response) {
+            return response;
+        }
         let credentials = match self.get_credentials() {
             Credentials::Bound(cred) => cred,
             Credentials::Unbound(err) => return err,
@@ -257,6 +284,9 @@ impl<Backend: BackendHandler + LoginHandler + OpaqueHandler> LdapHandler<Backend
 
     #[instrument(skip_all, level = "debug")]
     pub async fn create_user_or_group(&self, request: LdapAddRequest) -> LdapResult<Vec<LdapOp>> {
+        if let Some(response) = self.readonly_response(make_add_response) {
+            return Ok(response);
+        }
         let backend_handler = self
             .user_info
             .as_ref()
@@ -270,6 +300,9 @@ impl<Backend: BackendHandler + LoginHandler + OpaqueHandler> LdapHandler<Backend
 
     #[instrument(skip_all, level = "debug")]
     pub async fn delete_user_or_group(&self, request: String) -> LdapResult<Vec<LdapOp>> {
+        if let Some(response) = self.readonly_response(make_del_response) {
+            return Ok(response);
+        }
         let backend_handler = self
             .user_info
             .as_ref()
@@ -368,8 +401,16 @@ pub mod tests {
     }
 
     pub async fn setup_bound_handler_with_group(
+        mock: MockTestBackendHandler,
+        group: &str,
+    ) -> LdapHandler<MockTestBackendHandler> {
+        setup_bound_handler_with_group_and_readonly(mock, group, false).await
+    }
+
+    pub async fn setup_bound_handler_with_group_and_readonly(
         mut mock: MockTestBackendHandler,
         group: &str,
+        ldap_readonly: bool,
     ) -> LdapHandler<MockTestBackendHandler> {
         mock.expect_bind()
             .with(eq(BindRequest {
@@ -393,7 +434,8 @@ pub mod tests {
                 Ok(set)
             });
         setup_default_schema(&mut mock);
-        let mut ldap_handler = LdapHandler::new_for_tests(mock, "dc=Example,dc=com");
+        let mut ldap_handler =
+            LdapHandler::new_for_tests_with_readonly(mock, "dc=Example,dc=com", ldap_readonly);
         let request = LdapBindRequest {
             dn: "uid=test,ou=people,dc=example,dc=coM".to_string(),
             cred: LdapBindCred::Simple("pass".to_string()),
@@ -418,6 +460,12 @@ pub mod tests {
         mock: MockTestBackendHandler,
     ) -> LdapHandler<MockTestBackendHandler> {
         setup_bound_handler_with_group(mock, "lldap_admin").await
+    }
+
+    pub async fn setup_bound_admin_readonly_handler(
+        mock: MockTestBackendHandler,
+    ) -> LdapHandler<MockTestBackendHandler> {
+        setup_bound_handler_with_group_and_readonly(mock, "lldap_admin", true).await
     }
 
     #[tokio::test]
