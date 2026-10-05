@@ -200,6 +200,15 @@ where
 }
 
 fn validate_trusted_proxy(client_ip: IpAddr, trusted_proxies: &[ipnet::IpNet]) -> TcpResult<()> {
+    // A dual-stack socket reports IPv4 peers as IPv4-mapped IPv6 addresses
+    // Normalize it so it is correctly matched by the IPv4 allowlist
+    let client_ip = match client_ip {
+        IpAddr::V6(v6) => match v6.to_ipv4_mapped() {
+            Some(v4) => IpAddr::V4(v4),
+            None => IpAddr::V6(v6),
+        },
+        v4 => v4,
+    };
     if trusted_proxies.iter().any(|cidr| cidr.contains(&client_ip)) {
         return Ok(());
     }
@@ -879,6 +888,14 @@ mod tests {
     fn trusted_proxy_is_accepted() {
         let client_ip = "192.0.2.10".parse().unwrap();
         let trusted_proxies = ["192.0.2.0/24".parse().unwrap()];
+
+        assert!(validate_trusted_proxy(client_ip, &trusted_proxies).is_ok());
+    }
+
+    #[test]
+    fn v4_mapped_proxy_is_normalized_to_ipv4() {
+        let client_ip = "::ffff:127.0.0.1".parse().unwrap();
+        let trusted_proxies = ["127.0.0.0/8".parse().unwrap()];
 
         assert!(validate_trusted_proxy(client_ip, &trusted_proxies).is_ok());
     }
